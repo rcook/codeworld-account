@@ -16,7 +16,7 @@
 module Main (main) where
 
 import           CodeWorld.Account
-import           Control.Applicative (optional)
+import           Control.Applicative ((<|>), optional)
 import           Control.Monad (replicateM, when, zipWithM)
 import qualified Data.ByteString.Lazy.Char8 as Char8 (putStrLn)
 import           Data.Csv (ToRecord(..), encode, toField, record)
@@ -27,6 +27,7 @@ import           Options.Applicative
                     , argument
                     , command
                     , execParser
+                    , flag'
                     , fullDesc
                     , header
                     , help
@@ -38,6 +39,7 @@ import           Options.Applicative
                     , option
                     , progDesc
                     , short
+                    , strOption
                     , subparser
                     , switch
                     )
@@ -56,9 +58,11 @@ data Command =
     Init Bool
     | Dump
     | Create UserId Status
-    | Update UserId (Maybe Status) Bool
+    | Update UserId (Maybe Status) PasswordUpdate
     | Delete UserId
     | Verify UserId Password
+
+data PasswordUpdate = GeneratePassword | SetPassword Password | NoPasswordUpdate
 
 pOptions :: Parser Options
 pOptions = Options <$> pStore <*> pCommand
@@ -90,7 +94,13 @@ pUpdate :: Parser Command
 pUpdate = Update
     <$> pUserId
     <*> (optional $ option (maybeReader readStatus) (long "status" <> short 's' <> help "Account status"))
-    <*> switch (long "password" <> short 'p' <> help "Generate new password")
+    <*> (pGeneratePassword <|> pSetPassword <|> pure NoPasswordUpdate)
+
+pGeneratePassword :: Parser PasswordUpdate
+pGeneratePassword = flag' GeneratePassword (long "generate-password" <> short 'g' <> help "Generate new password")
+
+pSetPassword :: Parser PasswordUpdate
+pSetPassword = SetPassword . Password <$> strOption (long "password" <> short 'p' <> help "Set password")
 
 pDelete :: Parser Command
 pDelete = Delete <$> pUserId
@@ -123,7 +133,7 @@ main = parse >>= go
         go (Options store (Init overwrite)) = doInit store overwrite
         go (Options store Dump) = doDump store
         go (Options store (Create userId status)) = doCreate store userId status
-        go (Options store (Update userId newPassword mbStatus)) = doUpdate store userId newPassword mbStatus
+        go (Options store (Update userId mbStatus passwordUpdate)) = doUpdate store userId mbStatus passwordUpdate
         go (Options store (Delete userId)) = doDelete store userId
         go (Options store (Verify userId password)) = doVerify store userId password
 
@@ -150,13 +160,17 @@ doCreate store userId status = do
     putStrLn $ "Created new account with password " ++ show password
 
 
-doUpdate :: Store -> UserId -> Maybe Status -> Bool -> IO ()
-doUpdate store userId mbStatus False = updateAccount store userId mbStatus Nothing
-doUpdate store userId mbStatus True = do
+doUpdate :: Store -> UserId -> Maybe Status -> PasswordUpdate -> IO ()
+doUpdate store userId mbStatus NoPasswordUpdate = updateAccount store userId mbStatus Nothing
+doUpdate store userId mbStatus GeneratePassword = do
     password <- makeDefaultPassword
     passwordHash <- hash password
     updateAccount store userId mbStatus (Just passwordHash)
     putStrLn $ "Updated existing account with password " ++ show password
+doUpdate store userId mbStatus (SetPassword password) = do
+    passwordHash <- hash password
+    updateAccount store userId mbStatus (Just passwordHash)
+    putStrLn "Updated existing account with specified password"
 
 doDelete :: Store -> UserId -> IO ()
 doDelete store userId = deleteAccount store userId
