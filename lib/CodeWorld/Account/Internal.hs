@@ -18,24 +18,18 @@ module CodeWorld.Account.Internal
     , deleteAccount
     , storeExists
     , fetchAllAccounts
-    , hash
     , initStore
     , updateAccount
     , verifyAccount
     ) where
 
+import qualified CodeWorld.Account.Hashing as Hashing
 import           CodeWorld.Account.Types
 import           Control.Monad.Trans.State.Strict
                     ( State
                     , execState
                     , modify
                     )
-import           Crypto.BCrypt
-                    ( hashPasswordUsingPolicy
-                    , slowerBcryptHashingPolicy
-                    , validatePassword
-                    )
-import qualified Data.ByteString.Char8 as Char8 (pack)
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as Text (intercalate, pack)
@@ -103,12 +97,12 @@ fetchAllAccounts store =
         return $ map (\(userIdRaw, status) -> (UserId userIdRaw, status)) result
 
 verifyAccount :: Store -> UserId -> Password -> IO (Maybe Status)
-verifyAccount store (UserId userIdRaw) (Password passwordRaw) = do
+verifyAccount store (UserId userIdRaw) password = do
     mbResult <- fetch
     case mbResult of
         Nothing -> pure Nothing
-        Just (status, (PasswordHash passwordHashRaw)) ->
-            if validatePassword passwordHashRaw (Char8.pack passwordRaw)
+        Just (status, passwordHash) ->
+            if Hashing.validate passwordHash password
                 then pure $ Just status
                 else pure Nothing
     where
@@ -122,13 +116,6 @@ verifyAccount store (UserId userIdRaw) (Password passwordRaw) = do
                     [ (status, passwordHashRaw) ] -> return $ Just (status, PasswordHash passwordHashRaw)
                     [] -> return Nothing
                     _ -> error "Assertion failure"
-
-hash :: Password -> IO PasswordHash
-hash (Password passwordRaw) = do
-    mbPasswordHashRaw <- hashPasswordUsingPolicy slowerBcryptHashingPolicy (Char8.pack passwordRaw)
-    case mbPasswordHashRaw of
-        Nothing -> error "Assertion failed"
-        Just passwordHashRaw -> return $ PasswordHash passwordHashRaw
 
 buildParams :: QueryParamsBuilder -> QueryParams
 buildParams = (flip execState) []

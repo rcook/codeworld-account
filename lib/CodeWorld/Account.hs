@@ -12,9 +12,11 @@
 -}
 
 module CodeWorld.Account
-    ( module CodeWorld.Account.Internal
+    ( module CodeWorld.Account.Hashing
+    , module CodeWorld.Account.Internal
     , module CodeWorld.Account.Types
     ) where
 
+import CodeWorld.Account.Hashing
 import CodeWorld.Account.Internal
 import CodeWorld.Account.Types

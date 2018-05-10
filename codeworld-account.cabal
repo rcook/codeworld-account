@@ -33,6 +33,7 @@ library
                                           , text
                                           , transformers
   exposed-modules:                          CodeWorld.Account
+                                          , CodeWorld.Account.Hashing
                                           , CodeWorld.Account.Internal
                                           , CodeWorld.Account.Types
 
