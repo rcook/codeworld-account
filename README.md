@@ -23,7 +23,7 @@ stack build --fast
 ## Run application
 
 ```
-stack exec codeworld-account-app
+stack exec codeworld-account
 ```
 
 ## Run tests
